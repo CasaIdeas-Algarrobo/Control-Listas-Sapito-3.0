@@ -339,15 +339,31 @@ async function iniciarCamara(camaraId) {
   try {
     html5QrCode = new Html5Qrcode('reader', {
       formatsToSupport: FORMATOS_BARCODE,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       verbose: false
     });
 
+    // Zona de escaneo ANCHA y adaptable: los códigos de barras 1D
+    // (EAN/UPC) necesitan una franja amplia para decodificarse bien,
+    // sobre todo en iPhone.
+    const qrboxFn = (vfW, vfH) => {
+      const w = Math.floor(Math.min(vfW, vfH * 2) * 0.9);
+      return { width: w, height: Math.floor(w * 0.45) };
+    };
+
     await html5QrCode.start(
-      camaraId,
+      { deviceId: { exact: camaraId } },
       {
-        fps: 12,
-        qrbox: { width: 280, height: 120 },
-        aspectRatio: 1.5
+        fps: 10,
+        qrbox: qrboxFn,
+        aspectRatio: 1.7777778,
+        // Más resolución + enfoque continuo = el iPhone enfoca el código
+        videoConstraints: {
+          deviceId: { exact: camaraId },
+          width:  { ideal: 1920 },
+          height: { ideal: 1080 },
+          advanced: [{ focusMode: 'continuous' }]
+        }
       },
       onScanExitoso,
       () => {}   // errores por frame silenciosos (normal mientras enfoca)
@@ -365,7 +381,7 @@ async function iniciarCamara(camaraId) {
   } catch (err) {
     let mensaje = 'No se pudo iniciar esta cámara.';
     if (err.toString().includes('Permission')) {
-      mensaje = 'Permiso de cámara denegado. Actívalo en la configuración del navegador.';
+      mensaje = 'Permiso de cámara denegado. Actívalo en Ajustes → Safari → Cámara.';
     }
     scannerStatus.textContent = mensaje;
     scannerStatus.className = 'feedback error';
@@ -376,7 +392,6 @@ async function iniciarCamara(camaraId) {
     }
   }
 }
-
 /* ------ Detener la cámara activa sin cerrar el modal ------ */
 async function detenerCamaraActual() {
   if (html5QrCode && scannerActivo) {
